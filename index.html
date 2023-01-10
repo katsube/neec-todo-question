@@ -1,0 +1,248 @@
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>やることリスト</title>
+
+	<!-- CSSのフレームワークを読み込み -->
+	<!-- Bootstrap -->
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+
+	<!-- FontAwesome -->
+	<script src="https://kit.fontawesome.com/ffe4634c5a.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<section class="vh-100" style="background-color: #14b9fa">
+  <div class="container py-5 h-100">
+    <div class="row d-flex justify-content-center align-items-center h-100">
+      <div class="col col-xl-10">
+
+        <div class="card" style="border-radius: 15px;">
+          <div class="card-body p-5">
+
+            <h3 class="mb-3">やることリスト</h3>
+
+            <!-- タスクを新規追加-->
+            <form id="form-todo-create" class="d-flex justify-content-center align-items-center mb-4">
+              <div class="form-outline flex-fill">
+                <input type="text" id="text-todo" class="form-control form-control-lg" placeholder="タスクの内容を記入してください">
+              </div>
+              <button type="submit" id="btn-create" class="btn btn-primary btn-lg ms-2">追加する</button>
+            </form>
+
+            <!-- タスク一覧 -->
+            <ul id="todolist" class="list-group mb-0">
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<script>
+/**
+ * ページ読み込み完了時に1度だけ実行する
+ */
+window.addEventListener('load', async ()=>{
+	//---------------------------
+	// タスクを新規に作成する
+	//---------------------------
+	document.querySelector('#form-todo-create').addEventListener('submit', async (e)=>{
+		e.preventDefault();		// 画面遷移しないようにする
+		await createTodo();
+	});
+	//---------------------------
+	// タスク一覧を描画する
+	//---------------------------
+	await drawToDoList();
+});
+
+/**
+ * タスクを新規に作成する
+ *
+ */
+async function createTodo(){
+	// 入力値を取得
+	const text = document.querySelector('#text-todo');
+	if( ! text.value ){
+		alert('タスクの内容を入力してください');
+		text.focus();
+		return;
+	}
+
+	// API経由でタスクを作成
+	const result = await requestAPI('/api/task/create.php', 'POST', {body: text.value});
+	if( ! result.head.status ){
+		alert(`通信に失敗しました (${result.data})`);
+		return;
+	}
+
+	// 画面上に描画
+	drawToDoList([result.data]);
+}
+
+
+/**
+ * タスクを完了する
+ *
+ */
+async function doneTodo(){
+  const id = this.getAttribute('value');
+
+  // API経由で完了にする
+  const result = await requestAPI('/api/task/done.php', 'POST', {id});
+  if( ! result.head.status ){
+    alert(`通信に失敗しました (${result.data})`);
+    return;
+  }
+
+  // タスクを再描画
+  await drawToDoList();
+}
+
+/**
+ * タスクを削除する
+ *
+ */
+async function removeTodo(){
+  const id = this.getAttribute('data-id');
+
+  // API経由で削除する
+  const result = await requestAPI('/api/task/remove.php', 'POST', {id});
+  if( ! result.head.status ){
+    alert(`通信に失敗しました (${result.data})`);
+    return;
+  }
+
+  // タスクを再描画
+  await drawToDoList();
+}
+
+/**
+ * タスクの一覧を描画する
+ *
+ * @return void
+ */
+async function drawToDoList(){
+  // NowLoading
+  nowLoading();
+
+	// API経由で一覧を取得
+	const list = await requestAPI('/api/task/list.php');
+	if( ! list.head.status ){
+		alert(`通信に失敗しました (${list.data})`);
+		return;
+	}
+
+	// 画面上に描画
+	const todolist = document.querySelector('#todolist');
+	todolist.innerHTML = '';		// 一旦クリアする
+
+  // データが存在しない場合
+  if( list.data.length === 0 ){
+    const li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-center border-start-0 border-top-0 border-end-0 border-bottom rounded-0 mb-2';
+    li.innerHTML = '<span class="text-muted">※タスクが登録されていません</span>';
+    todolist.appendChild(li);
+  }
+  // データが存在する場合
+  else{
+    for(let i=0; i<list.data.length; i++){
+      drawToDo(todolist, list.data[i]);
+    }
+  }
+}
+
+/**
+ * タスクを描画する
+ *
+ * @param object element タスクを描画するul要素
+ * @param object item    タスクの情報
+ * @return void
+ */
+function drawToDo(element, item){
+	//-------------------------
+	// 描画するHTMLを作成
+	//-------------------------
+	const li = document.createElement('li');
+	li.className = 'list-group-item d-flex justify-content-between align-items-center border-start-0 border-top-0 border-end-0 border-bottom rounded-0 mb-2';
+	li.innerHTML = `
+		<div class="d-flex align-items-center">
+			<span class="me-2">${item.id}.</span>
+      <input id="done-${item.id}" class="form-check-input me-2" type="checkbox" value="${item.id}" aria-label="..." ${(item.done === 1)? 'checked disabled' : ''} />
+			${(item.done === 1)? `<s>${item.body}</s>` : item.body}
+		</div>
+		<a href="#!" id="remove-${item.id}" data-id="${item.id}" data-mdb-toggle="tooltip" title="削除する">
+			<i class="fas fa-times text-primary"></i>
+		</a>
+	`;
+	element.appendChild(li);
+
+	//-------------------------
+	// イベント設定
+	//-------------------------
+	// チェックボックス押下で完了
+	document.querySelector(`#done-${item.id}`).addEventListener('change', doneTodo);
+
+	// 削除ボタン押下で削除
+	document.querySelector(`#remove-${item.id}`).addEventListener('click', removeTodo);
+}
+
+/**
+ * ローディング画面を表示する
+ *
+ * @return void
+ */
+function nowLoading(){
+  const element = document.querySelector('#todolist');
+  element.innerHTML = `
+    <div class="d-flex justify-content-center align-items-center" style="height: 100px;">
+      <i class="spinner-border text-primary"></i>&nbsp;
+      <span class="fs-2">Now Loading</span>
+    </div>
+  `;
+}
+
+/**
+ * APIにリクエストする
+ *
+ * @param string url    APIのURL
+ * @param string method 'GET' or 'POST'
+ * @param object data   APIへの引数
+ * @return object
+ */
+async function requestAPI(url, method='GET', data=null){
+	// APIに渡すパラメーターを準備
+	const param = {
+		method: method,
+		headers: {
+			'Content-Type': 'application/x-www-form-urlencoded'
+		}
+	};
+	if ( data !== null && method === 'POST') {
+		param.body = new URLSearchParams(data);
+	}
+	else if( data !== null && method === 'GET') {
+		url += '?' + new URLSearchParams(data);
+	}
+
+  // URLを相対パスに変換
+  url = `.${url}`;    // 例：./api/task/list.php
+
+	// APIにリクエスト
+	try{
+		const response = await fetch(url, param);
+		const json = await response.json();
+		return(json);
+	}
+	catch(e){
+		alert('通信中にエラーが発生しました');
+		console.log(e);
+	}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<?php
+/**
+ * 【見本】データベース接続設定
+ *
+ * [利用方法]
+ *   1. このファイルをコピーし、ファイル名を「database.php」に変更してください。
+ *   2. database.php内の接続先、アカウント情報を正式な物に変更してください。
+ */
+
+// 接続先
+define('CONFIG_DB_DSN',  'mysql:dbname=(学籍番号+db);host=localhost');
+
+// アカウント
+define('CONFIG_DB_USER', '学籍番号');		// ユーザー名
+define('CONFIG_DB_PASS', 'xxxxxxxx');		// パスワード
